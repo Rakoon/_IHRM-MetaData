@@ -19,9 +19,10 @@ from pathlib import Path
 import openpyxl
 
 ROOT = Path(__file__).parent
-XLSX = ROOT / "IHRM_DB_Metadata_Master_2026-05-21.xlsx"
+XLSX = ROOT / "IHRM_DB_Metadata_Master_2026-05-23.xlsx"
 ARTICLES = ROOT / "article_list.csv"
 OUT = ROOT / "IHRM_DB_Metadata.html"
+SNAPSHOT_DATE = "2026-05-23"
 
 
 def last_name(person: str) -> str:
@@ -236,7 +237,8 @@ def load_datasets(articles: dict[str, dict]) -> list[dict]:
     ws = wb["Metadata"]
     rows = list(ws.iter_rows(values_only=True))
     header = rows[0]
-    # Expected: '#','Name','Owner','Link','Description','Public','Years','Countries','Freq.','Citing Articles'
+    # Expected (2026-05-23): '#','Name','Owner','Link','Description','Category',
+    # 'Accessibility','How to access data','Years','Countries','Freq.','Citing Articles'
     idx = {h: i for i, h in enumerate(header) if h}
     out: list[dict] = []
     for raw in rows[1:]:
@@ -249,7 +251,8 @@ def load_datasets(articles: dict[str, dict]) -> list[dict]:
         owner = clean(raw[idx["Owner"]])
         link_blob = clean(raw[idx["Link"]])
         description = clean(raw[idx["Description"]])
-        public_blob = clean(raw[idx["Public"]])
+        category = clean(raw[idx["Category"]])
+        accessibility = clean(raw[idx["Accessibility"]])
         years = clean(raw[idx["Years"]])
         countries_raw = clean(raw[idx["Countries"]])
         freq = raw[idx["Freq."]]
@@ -297,8 +300,8 @@ def load_datasets(articles: dict[str, dict]) -> list[dict]:
                 "links": parse_links(link_blob),
                 "link_raw": link_blob,
                 "description": description,
-                "public_links": parse_links(public_blob),
-                "public_raw": public_blob,
+                "category": category,
+                "accessibility": accessibility,
                 "years": years,
                 "countries_raw": countries_raw,
                 "countries": normalize_country(countries_raw),
@@ -430,13 +433,59 @@ HTML_TEMPLATE = r"""<!doctype html>
   table.ihrm-table tbody tr.main-row:hover { background: var(--row-hover); }
   table.ihrm-table tbody tr.detail-row > td { padding: 0; border-bottom: 1px solid var(--rule-strong); background: var(--bg-soft); }
   td.col-num { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
-  td.col-name { font-weight: 600; font-family: var(--serif); font-size: 15.5px; color: var(--psu-navy-dark); }
-  td.col-name .toggle-hint { display: inline-block; margin-right: 6px; color: var(--muted); font-family: var(--sans); font-weight: 500; transition: transform 0.15s; }
-  tr.main-row.open td.col-name .toggle-hint { transform: rotate(90deg); }
-  td.col-owner { color: #2a3340; }
+  td.col-name {
+    font-weight: 600; font-family: var(--serif); font-size: 15.5px;
+    color: var(--psu-navy-dark);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.12s;
+  }
+  tr.main-row:hover td.col-name { text-decoration-color: var(--psu-navy); }
+  tr.main-row.open td.col-name { text-decoration-color: var(--psu-navy); }
+  td.col-category {
+    color: #2a3340;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  td.col-category .cat-chip {
+    display: inline-block;
+    background: var(--chip-bg);
+    color: var(--chip-ink);
+    padding: 1px 7px;
+    border-radius: 10px;
+    margin: 1px 3px 1px 0;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
   td.col-countries { color: #2a3340; font-size: 13.5px; line-height: 1.4; }
   td.col-years { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; line-height: 1.4; }
   td.col-freq { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--psu-navy); }
+  td.col-caret {
+    text-align: center; color: var(--psu-navy);
+    font-size: 14px; user-select: none;
+  }
+  td.col-caret .caret {
+    display: inline-block;
+    transition: transform 0.18s ease;
+    opacity: 0.55;
+  }
+  tr.main-row:hover td.col-caret .caret { opacity: 1; }
+  tr.main-row.open td.col-caret .caret { transform: rotate(180deg); opacity: 1; }
+
+  .ihrm-row-hint {
+    color: var(--muted);
+    font-size: 15px;
+    margin: 0 0 8px;
+    padding-left: 2px;
+  }
+  .ihrm-row-hint .caret-mark {
+    display: inline-block;
+    color: var(--psu-navy);
+    margin: 0 2px;
+  }
 
   .detail-pad { padding: 16px 18px 22px 60px; }
   .detail-grid {
@@ -452,6 +501,18 @@ HTML_TEMPLATE = r"""<!doctype html>
   .detail .block { margin-bottom: 16px; }
   .detail .desc { white-space: pre-wrap; color: #2a3340; font-size: 14.5px; line-height: 1.55; }
   .detail .meta-line { color: #2a3340; font-size: 14px; }
+  .access-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+  .access-public  { background: #dff3e3; color: #1f6b32; }
+  .access-collab  { background: #dde9f7; color: #1E407C; }
+  .access-restr   { background: #fbe1cf; color: #8b3e0c; }
+  .access-unspec  { background: #ebeef3; color: #5a6470; }
   .detail .link-list { list-style: none; padding: 0; margin: 0; }
   .detail .link-list li { margin: 3px 0; font-size: 13.5px; word-break: break-all; }
   .detail .pre { white-space: pre-wrap; color: #2a3340; font-size: 13.5px; }
@@ -522,8 +583,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       <option value="name-desc">Sort: name (Z&ndash;A)</option>
       <option value="id-asc">Sort: dataset # (asc)</option>
       <option value="id-desc">Sort: dataset # (desc)</option>
-      <option value="owner-asc">Sort: owner (A&ndash;Z)</option>
-      <option value="owner-desc">Sort: owner (Z&ndash;A)</option>
+      <option value="category-asc">Sort: category (A&ndash;Z)</option>
+      <option value="category-desc">Sort: category (Z&ndash;A)</option>
       <option value="countries-asc">Sort: countries (A&ndash;Z)</option>
       <option value="countries-desc">Sort: countries (Z&ndash;A)</option>
       <option value="years-asc">Sort: earliest year first</option>
@@ -538,24 +599,29 @@ HTML_TEMPLATE = r"""<!doctype html>
   </div>
 
   <div class="ihrm-result-count" id="result-count"></div>
+  <div class="ihrm-row-hint">
+    Click any row <span class="caret-mark">&#9662;</span> to view the dataset description, links, and citing articles.
+  </div>
 
   <table class="ihrm-table" id="table">
     <colgroup>
       <col style="width: 52px">
-      <col style="width: 30%">
+      <col style="width: 32%">
       <col style="width: 26%">
-      <col style="width: 20%">
-      <col style="width: 14%">
-      <col style="width: 70px">
+      <col style="width: 18%">
+      <col style="width: 12%">
+      <col style="width: 66px">
+      <col style="width: 36px">
     </colgroup>
     <thead>
       <tr>
         <th data-sort="id">#<span class="arrow"></span></th>
         <th data-sort="name">Dataset<span class="arrow"></span></th>
-        <th data-sort="owner">Owner<span class="arrow"></span></th>
+        <th data-sort="category">Category<span class="arrow"></span></th>
         <th data-sort="countries">Countries<span class="arrow"></span></th>
         <th data-sort="years">Years<span class="arrow"></span></th>
         <th data-sort="freq">Cites<span class="arrow"></span></th>
+        <th aria-label="Expand"></th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -629,7 +695,8 @@ HTML_TEMPLATE = r"""<!doctype html>
   function matches(d, q) {
     if (!q) return true;
     const hay = [
-      d.name, d.owner, d.description, d.countries_raw, d.years,
+      d.name, d.owner, d.description, d.category, d.accessibility,
+      d.countries_raw, d.years,
       ...d.citing.map(c => c.label + " " + c.title + " " + c.authors + " " + c.journal),
     ].join("  ").toLowerCase();
     return hay.includes(q);
@@ -648,7 +715,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   const SORT_KEYS = {
     "id":        d => (d.id == null ? Number.POSITIVE_INFINITY : d.id),
     "name":      d => d.name.toLowerCase(),
-    "owner":     d => (d.owner || "￿").toLowerCase(),
+    "category":  d => (d.category || "￿").toLowerCase(),
     "countries": d => (d.countries_raw || "￿").toLowerCase(),
     "freq":      d => d.freq,
   };
@@ -683,6 +750,24 @@ HTML_TEMPLATE = r"""<!doctype html>
       if (isActive) arrow.innerHTML = dir === "desc" ? "&#9660;" : "&#9650;";
       else arrow.innerHTML = "&#9650;&#9660;";
     });
+  }
+
+  function categoryChipsHtml(catRaw, q) {
+    if (!catRaw) return "";
+    const parts = String(catRaw).split(/[;,]/).map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return escapeHtml(catRaw);
+    return parts.map(p => `<span class="cat-chip">${highlight(p, q)}</span>`).join("");
+  }
+  function accessClass(s) {
+    const k = (s || "").toLowerCase();
+    if (k.includes("public"))     return "access-public";
+    if (k.includes("collab"))     return "access-collab";
+    if (k.includes("restrict"))   return "access-restr";
+    return "access-unspec";
+  }
+  function accessBadgeHtml(s) {
+    if (!s) return '<span class="access-badge access-unspec">Not Specified</span>';
+    return `<span class="access-badge ${accessClass(s)}">${escapeHtml(s)}</span>`;
   }
 
   function citingHtml(d) {
@@ -721,6 +806,11 @@ HTML_TEMPLATE = r"""<!doctype html>
     const countriesBlock = d.countries_raw
       ? `<div class="block"><h3>Countries</h3><div class="meta-line">${escapeHtml(d.countries_raw)}</div></div>`
       : "";
+    const ownerBlock = d.owner
+      ? `<div class="block"><h3>Owner</h3><div class="meta-line">${escapeHtml(d.owner)}</div></div>`
+      : "";
+    const accessBlock =
+      `<div class="block"><h3>Accessibility</h3><div class="meta-line">${accessBadgeHtml(d.accessibility)}</div></div>`;
     let linksHtml = "";
     if (d.links.length) {
       const items = d.links.map(u => `<li><a href="${escapeAttr(u)}" target="_blank" rel="noopener noreferrer">${escapeHtml(u)}</a></li>`).join("");
@@ -728,20 +818,13 @@ HTML_TEMPLATE = r"""<!doctype html>
     } else if (d.link_raw) {
       linksHtml = `<div class="block"><h3>Owner links</h3><div class="pre">${escapeHtml(d.link_raw)}</div></div>`;
     }
-    let publicHtml = "";
-    if (d.public_links.length) {
-      const items = d.public_links.map(u => `<li><a href="${escapeAttr(u)}" target="_blank" rel="noopener noreferrer">${escapeHtml(u)}</a></li>`).join("");
-      publicHtml = `<div class="block"><h3>Public documentation</h3><ul class="link-list">${items}</ul></div>`;
-    } else if (d.public_raw) {
-      publicHtml = `<div class="block"><h3>Public documentation</h3><div class="pre">${escapeHtml(d.public_raw)}</div></div>`;
-    }
     const citingBlock = `<div class="block"><h3>Citing articles (${d.citing.length})</h3>${citingHtml(d)}</div>`;
 
     return (
       `<div class="detail-pad detail">` +
         `<div class="detail-grid">` +
-          `<div>${desc}${yearsBlock}${countriesBlock}</div>` +
-          `<div>${linksHtml}${publicHtml}${citingBlock}</div>` +
+          `<div>${desc}${yearsBlock}${countriesBlock}${citingBlock}</div>` +
+          `<div>${ownerBlock}${accessBlock}${linksHtml}</div>` +
         `</div>` +
       `</div>`
     );
@@ -750,16 +833,17 @@ HTML_TEMPLATE = r"""<!doctype html>
   function rowHtml(d, q) {
     const isOpen = state.openIds.has(d._key);
     const main =
-      `<tr class="main-row${isOpen ? " open" : ""}" data-id="${d._key}">` +
+      `<tr class="main-row${isOpen ? " open" : ""}" data-id="${d._key}" title="Click for details">` +
         `<td class="col-num">${escapeHtml(d.id != null ? String(d.id) : "")}</td>` +
-        `<td class="col-name"><span class="toggle-hint">&#9656;</span>${highlight(d.name, q)}</td>` +
-        `<td class="col-owner">${highlight(d.owner, q)}</td>` +
+        `<td class="col-name">${highlight(d.name, q)}</td>` +
+        `<td class="col-category">${categoryChipsHtml(d.category, q)}</td>` +
         `<td class="col-countries">${highlight(d.countries_raw, q)}</td>` +
         `<td class="col-years">${highlight(d.years, q)}</td>` +
         `<td class="col-freq">${d.freq}</td>` +
+        `<td class="col-caret"><span class="caret">&#9662;</span></td>` +
       `</tr>`;
     if (!isOpen) return main;
-    return main + `<tr class="detail-row"><td colspan="6">${detailHtml(d)}</td></tr>`;
+    return main + `<tr class="detail-row"><td colspan="7">${detailHtml(d)}</td></tr>`;
   }
 
   function render() {
@@ -773,9 +857,11 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     const total = filtered.length;
     const limited = filtered.slice(0, state.pageSize);
+    // Only show the count line when a filter narrows the set
+    // (otherwise it duplicates the per-page dropdown).
     resultCountEl.textContent =
       total === DATA.length
-        ? `Showing ${Math.min(limited.length, total)} of ${total} datasets`
+        ? ""
         : `Showing ${Math.min(limited.length, total)} of ${total} matching datasets (of ${DATA.length} total)`;
 
     if (!total) {
@@ -810,7 +896,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 
   // Column-header sorting: click toggles direction on active column,
   // or switches to that column with a sensible default direction.
-  const DEFAULT_DIR = { freq: "desc", id: "asc", name: "asc", owner: "asc", countries: "asc", years: "asc" };
+  const DEFAULT_DIR = { freq: "desc", id: "asc", name: "asc", category: "asc", countries: "asc", years: "asc" };
   document.querySelectorAll("th[data-sort]").forEach(th => {
     th.addEventListener("click", () => {
       const col = th.dataset.sort;
@@ -863,9 +949,8 @@ HTML_TEMPLATE = r"""<!doctype html>
 def main() -> None:
     articles = load_articles()
     datasets = load_datasets(articles)
-    snapshot = "2026-05-21"
     payload = json.dumps(datasets, ensure_ascii=False)
-    html_out = HTML_TEMPLATE.replace("__SNAPSHOT__", snapshot).replace("__DATA__", payload)
+    html_out = HTML_TEMPLATE.replace("__SNAPSHOT__", SNAPSHOT_DATE).replace("__DATA__", payload)
     OUT.write_text(html_out, encoding="utf-8")
     print(f"Wrote {OUT} ({OUT.stat().st_size:,} bytes; {len(datasets)} datasets)")
 

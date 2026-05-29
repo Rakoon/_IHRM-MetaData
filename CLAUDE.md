@@ -11,7 +11,7 @@ build system, no test suite, and no version control.
 
 We have identified which empirical datasets are used across ~13,587 international
 HRM journal articles, and record each dataset's name, collecting organization, and
-description. The meta-database latest version = *IHRM_DB_Metadata_Master_2026-05-21.xlsx*
+description. The meta-database latest version = *IHRM_DB_Metadata_Master_2026-05-23.xlsx*
 
 The research goal: publish the meta-database table online. Make this table visually appealing
 and informative to management researchers around the world. Potential publication / hosting 

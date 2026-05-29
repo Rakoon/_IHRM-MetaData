@@ -10,8 +10,11 @@
 !LICENSE
 !CLAUDE.md
 !build_site.py
+!consolidate_2026-05-23.py
 !IHRM_DB_Metadata.html
 !IHRM_DB_Metadata_Master_2026-05-21.xlsx
+!IHRM_DB_Metadata_Master_2026-05-22.xlsx
+!IHRM_DB_Metadata_Master_2026-05-23.xlsx
 !article_list.csv
 
 # Python noise (in case build_site.py ever grows a venv or cache)
