@@ -1,0 +1,20 @@
+# Whitelist style: ignore everything by default, then opt files back in.
+# This keeps internal research material (txt corpus, meeting notes, drafts,
+# older snapshots, notebooks, etc.) out of the repository by accident.
+
+*
+
+# Tracked files
+!.gitignore
+!README.md
+!LICENSE
+!CLAUDE.md
+!build_site.py
+!IHRM_DB_Metadata.html
+!IHRM_DB_Metadata_Master_2026-05-21.xlsx
+!article_list.csv
+
+# Python noise (in case build_site.py ever grows a venv or cache)
+__pycache__/
+*.pyc
+.venv/
