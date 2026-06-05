@@ -101,134 +101,27 @@ def clean(v) -> str:
     return s
 
 
-_CLEAN_TOKEN = re.compile(r"^[A-Z][A-Za-z .'\-]{1,40}$")
-_MULTI_HINTS = (
-    "different countries",
-    "see dataset folder",
-    "multiple countries",
-    "mutiple countries",
-    "multiple countires",
-    "various countries",
-    "various",
-    "global",
-    "worldwide",
-    "international",
-    "cross-national",
-    "cross national",
-    "multi-country",
-    "multi country",
-    "multinational",
-)
-
-# Names that contain " and " or "/" and must survive splitting
-_PROTECTED = {
-    "Bosnia and Herzegovina": "BOSHER",
-    "Trinidad and Tobago": "TRITOB",
-    "Antigua and Barbuda": "ANTBAR",
-}
-
-# Canonical name aliases
-_ALIASES = {
-    "uk": "United Kingdom",
-    "u.k": "United Kingdom",
-    "u.k.": "United Kingdom",
-    "great britain": "United Kingdom",
-    "england": "United Kingdom",
-    "scotland": "United Kingdom",
-    "wales": "United Kingdom",
-    "northern ireland": "United Kingdom",
-    "northern irelan": "United Kingdom",
-    "us": "United States",
-    "u.s": "United States",
-    "u.s.": "United States",
-    "usa": "United States",
-    "u.s.a.": "United States",
-    "korea": "South Korea",
-    "the netherlands": "Netherlands",
-    "the czech republic": "Czech Republic",
-    "czechia": "Czech Republic",
-    "mainland china": "China",
-    "slovak republic": "Slovakia",
-    "russian federation": "Russia",
-    "former yugoslav republic of macedonia": "North Macedonia",
-    "german": "Germany",
-    "luxemborg": "Luxembourg",
-    "phillippines": "Philippines",
-}
-
-# Tokens to drop entirely (not real country facets)
-_DROP = {
-    "acknowledgement of country",
-    "all eu countries",
-    "eu member states",
-    "european union",
-    "eastern europe",
-    "central europe",
-    "south-eastern europe",
-    "central asia",
-    "eastern mediterranean",
-    "asia-pacific",
-    "asia",
-    "africa",
-    "europe",
-    "oceania",
-    "latin america",
-    "north america",
-    "middle east",
-    "includes data from africa",
-    "not available",
-    "other",
-    "southern",
-    "some categories include data from the u.s",
-    "global   depending on survey year",
-    "global",
-    "multiple countries",
-    "multiple countires",
-    "mutiple countries",
-    "different countries each year",
-}
+# Group/region labels in the Countries controlled vocabulary that are not
+# individual countries (excluded from the unique-country stat).
+_GROUP_LABELS = {"Global", "European countries", "Asia", "North America", "Multiple countries"}
 
 
 def normalize_country(s: str) -> list[str]:
-    """Pull distinct, clean country tokens from a Countries cell for the filter facet.
+    """Split a cleaned Countries cell into facet tokens.
 
-    Free-form column can include URLs, parenthetical notes, sentence-y text, etc.
-    Strip URLs first, then split on common separators, keep only tokens that look
-    like real country/region names. Cells that read as multi-country roll up to
-    a single 'Multiple / varies' facet so the filter stays usable.
+    The Countries column now uses a controlled vocabulary: a canonical single
+    country, a short comma-separated list, or a group label ('Global',
+    'European countries', etc.). Split on commas/newlines, de-dup, keep order.
     """
     if not s:
         return []
-    txt = URL_RE.sub(" ", s)
-    txt = re.sub(r"\([^)]*\)", " ", txt)  # strip parenthetical asides
-    low = txt.lower()
-    is_multi = any(h in low for h in _MULTI_HINTS)
-    # Protect multi-word names from " and " / "/" splits
-    for name, placeholder in _PROTECTED.items():
-        txt = re.sub(re.escape(name), placeholder, txt, flags=re.IGNORECASE)
-    tokens = re.split(r"[;,/&\n]|\.\s+| and ", txt)
-    out = []
+    out: list[str] = []
     seen = set()
-    for t in tokens:
-        t = t.strip().strip(".").strip()
-        if not t:
-            continue
-        # restore protected
-        for name, placeholder in _PROTECTED.items():
-            if placeholder.lower() in t.lower():
-                t = name
-                break
-        key = t.lower()
-        if key in _DROP:
-            continue
-        if key in _ALIASES:
-            t = _ALIASES[key]
-        if _CLEAN_TOKEN.match(t) and key not in {"the", "and", "or", "see", "n a"}:
-            if t not in seen:
-                seen.add(t)
-                out.append(t)
-    if is_multi:
-        return ["Multiple / varies"] + out if out else ["Multiple / varies"]
+    for t in re.split(r"[,\n]", s):
+        t = t.strip()
+        if t and t not in seen:
+            seen.add(t)
+            out.append(t)
     return out
 
 
@@ -661,8 +554,9 @@ HTML_TEMPLATE = r"""<!doctype html>
     d.countries.forEach(c => allCountries.add(c));
   });
   document.getElementById("stat-citing").textContent = allCiting.size.toLocaleString();
-  // Subtract the synthetic "Multiple / varies" if present in country count
-  const realCountries = new Set([...allCountries].filter(c => c !== "Multiple / varies"));
+  // Exclude group/region labels so the stat counts individual countries only
+  const GROUP_LABELS = new Set(["Global", "European countries", "Asia", "North America", "Multiple countries", "Multiple / varies"]);
+  const realCountries = new Set([...allCountries].filter(c => !GROUP_LABELS.has(c)));
   document.getElementById("stat-countries").textContent = realCountries.size.toLocaleString();
 
   // Country dropdown
