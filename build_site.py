@@ -1,7 +1,7 @@
 """Build a single self-contained HTML page for the IHRM Database Metadata Project.
 
 Reads:
-  - IHRM_DB_Metadata_Master_2026-05-21.xlsx (Metadata sheet)
+  - IHRM_DB_Metadata_Master_2026-06-05.xlsx (Metadata sheet)
   - article_list.csv (Key_13587, Publication Title, Author, Title, Year)
 
 Writes:
@@ -19,10 +19,10 @@ from pathlib import Path
 import openpyxl
 
 ROOT = Path(__file__).parent
-XLSX = ROOT / "IHRM_DB_Metadata_Master_2026-05-23.xlsx"
+XLSX = ROOT / "IHRM_DB_Metadata_Master_2026-06-05.xlsx"
 ARTICLES = ROOT / "article_list.csv"
 OUT = ROOT / "IHRM_DB_Metadata.html"
-SNAPSHOT_DATE = "2026-05-23"
+SNAPSHOT_DATE = "2026-06-05"
 
 
 def last_name(person: str) -> str:
@@ -53,7 +53,7 @@ def cite_label(author_field: str, year: str) -> str:
 
 def load_articles() -> dict[str, dict]:
     out: dict[str, dict] = {}
-    with ARTICLES.open("r", encoding="utf-8", errors="replace", newline="") as f:
+    with ARTICLES.open("r", encoding="cp1252", newline="") as f:
         r = csv.DictReader(f)
         for row in r:
             key = (row.get("Key_13587") or "").strip()
@@ -237,8 +237,9 @@ def load_datasets(articles: dict[str, dict]) -> list[dict]:
     ws = wb["Metadata"]
     rows = list(ws.iter_rows(values_only=True))
     header = rows[0]
-    # Expected (2026-05-23): '#','Name','Owner','Link','Description','Category',
-    # 'Accessibility','How to access data','Years','Countries','Freq.','Citing Articles'
+    # Expected (2026-06-05): '#','Name','Owner','Link','Description','Category',
+    # 'Accessibility','How to access data','Years','Countries','Freq.','Citing Articles',
+    # 'Cadence'
     idx = {h: i for i, h in enumerate(header) if h}
     out: list[dict] = []
     for raw in rows[1:]:
@@ -254,6 +255,7 @@ def load_datasets(articles: dict[str, dict]) -> list[dict]:
         category = clean(raw[idx["Category"]])
         accessibility = clean(raw[idx["Accessibility"]])
         years = clean(raw[idx["Years"]])
+        cadence = clean(raw[idx["Cadence"]]) if "Cadence" in idx else ""
         countries_raw = clean(raw[idx["Countries"]])
         freq = raw[idx["Freq."]]
         try:
@@ -303,6 +305,7 @@ def load_datasets(articles: dict[str, dict]) -> list[dict]:
                 "category": category,
                 "accessibility": accessibility,
                 "years": years,
+                "cadence": cadence,
                 "countries_raw": countries_raw,
                 "countries": normalize_country(countries_raw),
                 "freq": freq_n,
@@ -317,6 +320,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>IHRM Database Metadata &mdash; Penn State</title>
 <style>
   :root {
@@ -696,7 +700,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     if (!q) return true;
     const hay = [
       d.name, d.owner, d.description, d.category, d.accessibility,
-      d.countries_raw, d.years,
+      d.countries_raw, d.years, d.cadence,
       ...d.citing.map(c => c.label + " " + c.title + " " + c.authors + " " + c.journal),
     ].join("  ").toLowerCase();
     return hay.includes(q);
@@ -803,6 +807,9 @@ HTML_TEMPLATE = r"""<!doctype html>
     const yearsBlock = d.years
       ? `<div class="block"><h3>Years available</h3><div class="meta-line">${escapeHtml(d.years)}</div></div>`
       : "";
+    const cadenceBlock = d.cadence
+      ? `<div class="block"><h3>Collection cadence</h3><div class="meta-line">${escapeHtml(d.cadence)}</div></div>`
+      : "";
     const countriesBlock = d.countries_raw
       ? `<div class="block"><h3>Countries</h3><div class="meta-line">${escapeHtml(d.countries_raw)}</div></div>`
       : "";
@@ -823,7 +830,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     return (
       `<div class="detail-pad detail">` +
         `<div class="detail-grid">` +
-          `<div>${desc}${yearsBlock}${countriesBlock}${citingBlock}</div>` +
+          `<div>${desc}${yearsBlock}${cadenceBlock}${countriesBlock}${citingBlock}</div>` +
           `<div>${ownerBlock}${accessBlock}${linksHtml}</div>` +
         `</div>` +
       `</div>`
