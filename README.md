@@ -38,6 +38,7 @@ and writes `IHRM_DB_Metadata.html` in the project root.
   with full title and journal underneath
 - Designed to drop into a WordPress Custom HTML block or be embedded via iframe
   on sites.psu.edu
+- Temporary demo page access via: [https://rakoon.github.io/ihrm-db/](https://rakoon.github.io/ihrm-db/)
 
 ## License
 
