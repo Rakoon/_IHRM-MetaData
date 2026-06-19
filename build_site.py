@@ -19,20 +19,26 @@ from pathlib import Path
 import openpyxl
 
 ROOT = Path(__file__).parent
-XLSX = ROOT / "IHRM_DB_Metadata_Master_2026-06-05.xlsx"
+XLSX = ROOT / "IHRM_DB_Metadata_Master_2026-06-19.xlsx"
 ARTICLES = ROOT / "article_list.csv"
 OUT = ROOT / "IHRM_DB_Metadata.html"
-SNAPSHOT_DATE = "2026-06-05"
+SNAPSHOT_DATE = "2026-06-19"
 
 
 def last_name(person: str) -> str:
-    """Given 'Smith, John A.' return 'Smith'. Handles missing commas."""
+    """'Smith, John A.'->Smith; 'Koyuncu B'->Koyuncu; 'John Smith'->Smith."""
     person = person.strip()
     if "," in person:
         return person.split(",", 1)[0].strip()
-    # 'John Smith' fallback
     parts = person.split()
-    return parts[-1] if parts else person
+    if not parts:
+        return person
+    # 'Surname Initials' (no comma), e.g. 'Koyuncu B', 'Krishnan SK', 'van Berg J':
+    # the trailing token is a short all-caps initial block -> surname is the rest.
+    if len(parts) >= 2 and re.fullmatch(r"[A-Z]{1,3}\.?", parts[-1]):
+        return " ".join(parts[:-1])
+    # 'John Smith' (Western Given Surname) fallback
+    return parts[-1]
 
 
 def cite_label(author_field: str, year: str) -> str:
@@ -130,9 +136,9 @@ def load_datasets(articles: dict[str, dict]) -> list[dict]:
     ws = wb["Metadata"]
     rows = list(ws.iter_rows(values_only=True))
     header = rows[0]
-    # Expected (2026-06-05): '#','Name','Owner','Link','Description','Category',
+    # Expected (2026-06-19): '#','Name','Owner','Link','Description','Category',
     # 'Accessibility','How to access data','Years','Countries','Freq.','Citing Articles',
-    # 'Cadence'
+    # 'Cadence','Level of Analysis'
     idx = {h: i for i, h in enumerate(header) if h}
     out: list[dict] = []
     for raw in rows[1:]:
@@ -149,6 +155,7 @@ def load_datasets(articles: dict[str, dict]) -> list[dict]:
         accessibility = clean(raw[idx["Accessibility"]])
         years = clean(raw[idx["Years"]])
         cadence = clean(raw[idx["Cadence"]]) if "Cadence" in idx else ""
+        level = clean(raw[idx["Level of Analysis"]]) if "Level of Analysis" in idx else ""
         countries_raw = clean(raw[idx["Countries"]])
         freq = raw[idx["Freq."]]
         try:
@@ -199,6 +206,7 @@ def load_datasets(articles: dict[str, dict]) -> list[dict]:
                 "accessibility": accessibility,
                 "years": years,
                 "cadence": cadence,
+                "level": level,
                 "countries_raw": countries_raw,
                 "countries": normalize_country(countries_raw),
                 "freq": freq_n,
@@ -357,6 +365,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     line-height: 1.5;
     white-space: nowrap;
   }
+  td.col-level { color: #2a3340; font-size: 13px; line-height: 1.4; text-transform: capitalize; }
   td.col-countries { color: #2a3340; font-size: 13.5px; line-height: 1.4; }
   td.col-years { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; line-height: 1.4; }
   td.col-freq { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--psu-navy); }
@@ -482,6 +491,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       <option value="id-desc">Sort: dataset # (desc)</option>
       <option value="category-asc">Sort: category (A&ndash;Z)</option>
       <option value="category-desc">Sort: category (Z&ndash;A)</option>
+      <option value="level-asc">Sort: level of analysis (A&ndash;Z)</option>
+      <option value="level-desc">Sort: level of analysis (Z&ndash;A)</option>
       <option value="countries-asc">Sort: countries (A&ndash;Z)</option>
       <option value="countries-desc">Sort: countries (Z&ndash;A)</option>
       <option value="years-asc">Sort: earliest year first</option>
@@ -503,11 +514,11 @@ HTML_TEMPLATE = r"""<!doctype html>
   <table class="ihrm-table" id="table">
     <colgroup>
       <col style="width: 52px">
-      <col style="width: 32%">
-      <col style="width: 26%">
-      <col style="width: 18%">
-      <col style="width: 12%">
-      <col style="width: 66px">
+      <col style="width: 30%">
+      <col style="width: 22%">
+      <col style="width: 15%">
+      <col style="width: 17%">
+      <col style="width: 11%">
       <col style="width: 36px">
     </colgroup>
     <thead>
@@ -515,9 +526,9 @@ HTML_TEMPLATE = r"""<!doctype html>
         <th data-sort="id">#<span class="arrow"></span></th>
         <th data-sort="name">Dataset<span class="arrow"></span></th>
         <th data-sort="category">Category<span class="arrow"></span></th>
+        <th data-sort="level">Level<span class="arrow"></span></th>
         <th data-sort="countries">Countries<span class="arrow"></span></th>
         <th data-sort="years">Years<span class="arrow"></span></th>
-        <th data-sort="freq">Cites<span class="arrow"></span></th>
         <th aria-label="Expand"></th>
       </tr>
     </thead>
@@ -594,7 +605,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     if (!q) return true;
     const hay = [
       d.name, d.owner, d.description, d.category, d.accessibility,
-      d.countries_raw, d.years, d.cadence,
+      d.level, d.countries_raw, d.years, d.cadence,
       ...d.citing.map(c => c.label + " " + c.title + " " + c.authors + " " + c.journal),
     ].join("  ").toLowerCase();
     return hay.includes(q);
@@ -614,6 +625,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     "id":        d => (d.id == null ? Number.POSITIVE_INFINITY : d.id),
     "name":      d => d.name.toLowerCase(),
     "category":  d => (d.category || "￿").toLowerCase(),
+    "level":     d => (d.level || "￿").toLowerCase(),
     "countries": d => (d.countries_raw || "￿").toLowerCase(),
     "freq":      d => d.freq,
   };
@@ -738,9 +750,9 @@ HTML_TEMPLATE = r"""<!doctype html>
         `<td class="col-num">${escapeHtml(d.id != null ? String(d.id) : "")}</td>` +
         `<td class="col-name">${highlight(d.name, q)}</td>` +
         `<td class="col-category">${categoryChipsHtml(d.category, q)}</td>` +
+        `<td class="col-level">${highlight(d.level, q)}</td>` +
         `<td class="col-countries">${highlight(d.countries_raw, q)}</td>` +
         `<td class="col-years">${highlight(d.years, q)}</td>` +
-        `<td class="col-freq">${d.freq}</td>` +
         `<td class="col-caret"><span class="caret">&#9662;</span></td>` +
       `</tr>`;
     if (!isOpen) return main;
@@ -797,7 +809,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 
   // Column-header sorting: click toggles direction on active column,
   // or switches to that column with a sensible default direction.
-  const DEFAULT_DIR = { freq: "desc", id: "asc", name: "asc", category: "asc", countries: "asc", years: "asc" };
+  const DEFAULT_DIR = { freq: "desc", id: "asc", name: "asc", category: "asc", level: "asc", countries: "asc", years: "asc" };
   document.querySelectorAll("th[data-sort]").forEach(th => {
     th.addEventListener("click", () => {
       const col = th.dataset.sort;
