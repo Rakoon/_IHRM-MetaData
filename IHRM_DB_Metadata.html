@@ -201,6 +201,38 @@
   .access-collab  { background: #dde9f7; color: #1E407C; }
   .access-restr   { background: #fbe1cf; color: #8b3e0c; }
   .access-unspec  { background: #ebeef3; color: #5a6470; }
+
+  .ihrm-legend {
+    margin: 0 0 14px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--bg-soft);
+    padding: 0 14px;
+  }
+  .ihrm-legend summary {
+    cursor: pointer;
+    user-select: none;
+    color: var(--psu-navy);
+    font-weight: 600;
+    font-size: 13.5px;
+    padding: 10px 0;
+    list-style-position: inside;
+  }
+  .ihrm-legend summary:hover { color: var(--psu-navy-dark); }
+  .ihrm-legend[open] summary { border-bottom: 1px solid var(--rule); }
+  .ihrm-legend .legend-list {
+    list-style: none; padding: 12px 0 14px; margin: 0;
+    display: grid; gap: 9px; font-size: 13px;
+  }
+  .ihrm-legend .legend-list li {
+    display: grid; grid-template-columns: 168px 1fr; gap: 12px; align-items: start;
+  }
+  .ihrm-legend .legend-list .access-badge { justify-self: start; white-space: nowrap; }
+  .ihrm-legend .legend-desc { color: #2a3340; line-height: 1.45; }
+  @media (max-width: 620px) {
+    .ihrm-legend .legend-list li { grid-template-columns: 1fr; gap: 3px; }
+  }
+
   .detail .link-list { list-style: none; padding: 0; margin: 0; }
   .detail .link-list li { margin: 3px 0; font-size: 13.5px; word-break: break-all; }
   .detail .pre { white-space: pre-wrap; color: #2a3340; font-size: 13.5px; }
@@ -292,6 +324,11 @@
   <div class="ihrm-row-hint">
     Click any row <span class="caret-mark">&#9662;</span> to view the dataset description, links, and citing articles.
   </div>
+
+  <details class="ihrm-legend" id="access-legend">
+    <summary>What do the accessibility labels mean?</summary>
+    <ul class="legend-list"></ul>
+  </details>
 
   <table class="ihrm-table" id="table">
     <colgroup>
@@ -457,10 +494,28 @@
     if (k.includes("restrict"))   return "access-restr";
     return "access-unspec";
   }
+  // Single source of truth for the accessibility labels (legend + badge tooltips).
+  const ACCESS_DESC = {
+    "Publicly Accessible": "Openly available to anyone at no cost — typically via direct download (Excel/CSV, data portals, dashboards) or freely published reports on the provider's site. At most a simple, free registration is required; no fee, formal approval, or institutional affiliation is needed.",
+    "Collaborative Access": "Obtained by establishing a relationship with the provider rather than downloading freely: network/consortium membership, an institutional subscription or license, free researcher registration, or a direct request to the data owner. Generally granted to qualifying (often academic/non-profit) users once that condition is met.",
+    "Restricted Access": "Controlled, conditional access — requiring one or more of: a formal application with provider approval, user vetting/verification, a signed confidentiality or data-use agreement, payment/purchase, or release only in safeguarded form (secure/on-site environments or pre-aggregated tables). Eligibility may be limited and requests can be denied.",
+    "Not Specified": "Access conditions are unknown or were not determined during the accessibility review.",
+  };
   function accessBadgeHtml(s) {
-    if (!s) return '<span class="access-badge access-unspec">Not Specified</span>';
-    return `<span class="access-badge ${accessClass(s)}">${escapeHtml(s)}</span>`;
+    const label = s || "Not Specified";
+    const desc = ACCESS_DESC[label] || "";
+    const titleAttr = desc ? ` title="${escapeAttr(desc)}"` : "";
+    return `<span class="access-badge ${accessClass(label)}"${titleAttr}>${escapeHtml(label)}</span>`;
   }
+  // Populate the collapsible accessibility legend from ACCESS_DESC.
+  (function populateLegend() {
+    const list = document.querySelector("#access-legend .legend-list");
+    if (!list) return;
+    list.innerHTML = Object.keys(ACCESS_DESC).map(label =>
+      `<li><span class="access-badge ${accessClass(label)}">${escapeHtml(label)}</span>` +
+      `<span class="legend-desc">${escapeHtml(ACCESS_DESC[label])}</span></li>`
+    ).join("");
+  })();
 
   function citingHtml(d) {
     if (!d.citing.length) {
