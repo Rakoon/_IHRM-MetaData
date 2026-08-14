@@ -1,7 +1,7 @@
 """Build a single self-contained HTML page for the IHRM Database Metadata Project.
 
 Reads:
-  - IHRM_DB_Metadata_Master_2026-06-05.xlsx (Metadata sheet)
+  - IHRM_DB_Metadata_Master_2026-08-14.xlsx (Metadata sheet)
   - article_list.csv (Key_13587, Publication Title, Author, Title, Year)
 
 Writes:
@@ -19,10 +19,10 @@ from pathlib import Path
 import openpyxl
 
 ROOT = Path(__file__).parent
-XLSX = ROOT / "IHRM_DB_Metadata_Master_2026-06-19.xlsx"
+XLSX = ROOT / "IHRM_DB_Metadata_Master_2026-08-14.xlsx"
 ARTICLES = ROOT / "article_list.csv"
 OUT = ROOT / "IHRM_DB_Metadata.html"
-SNAPSHOT_DATE = "2026-06-19"
+SNAPSHOT_DATE = "2026-08-14"
 
 
 def last_name(person: str) -> str:

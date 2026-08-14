@@ -17,6 +17,7 @@
 !IHRM_DB_Metadata_Master_2026-05-23.xlsx
 !IHRM_DB_Metadata_Master_2026-06-05.xlsx
 !IHRM_DB_Metadata_Master_2026-06-19.xlsx
+!IHRM_DB_Metadata_Master_2026-08-14.xlsx
 !article_list.csv
 
 # Python noise (in case build_site.py ever grows a venv or cache)
